@@ -1,0 +1,29 @@
+#
+# Targets that don't affect documentation directories
+#
+all clean doc:
+	@set -e ;							\
+	app_pwd=`pwd` ;							\
+	if test -f vsn.mk; then						\
+	    echo "=== Entering application" `basename $$app_pwd` ;	\
+	    if test ! -d ebin ; then					\
+	    	mkdir ebin;						\
+	    fi ;							\
+	fi ;								\
+	for d in $(SUB_DIRECTORIES); do					\
+	    if test -f $$d/SKIP ; then					\
+		echo "=== Skipping subdir $$d, reason:" ;		\
+		cat $$d/SKIP ;						\
+		echo "===" ;						\
+	    else							\
+		if test ! -d $$d ; then					\
+		    echo "=== Skipping subdir $$d, it is missing" ;	\
+		else							\
+		    xflag="" ;						\
+		    (cd $$d && $(MAKE) $$xflag $@) ;			\
+		fi ;							\
+	    fi ;							\
+	done ;								\
+	if test -f vsn.mk; then						\
+	    echo "=== Exiting application" `basename $$app_pwd` ;	\
+	fi

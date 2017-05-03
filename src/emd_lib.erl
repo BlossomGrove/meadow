@@ -1,0 +1,370 @@
+%%% @author  <>
+%%% @copyright (C) 2015, 
+%%% @doc
+%%%
+%%% @end
+%%% Created : 20 Aug 2015 by  <>
+
+-module(emd_lib).
+
+
+-export([%% List operations
+	 umerge/1,remove_duplicates/1,append/2,merge_lists/3,
+
+	 %% OS operations
+	 open_file/2,write_data/2,mkdir/1,
+
+	 %% Erlang source compilation
+	 compile/3,
+	 compile_cb/4,compile_remote/3,compile_remote/4,
+
+	 %% Misc stuff
+	 load_beam/3,
+	 add_paths/2,
+	 start_apps/2,stop_app/0
+
+	]).
+
+-include("meadow_internal.hrl").
+
+%%% ============================================================================
+%% List operations
+%%% Merges a list of lists, by doing List1++List2++...++Listn but removing all
+%%% duplicates. Keeps ordering. 
+umerge(Lists) ->
+    umerge0(Lists,[]).
+
+umerge0([],Out) ->
+    Out;
+umerge0([List|Rest],Out) when is_list(List) ->
+    NewOut=umerge1(List,Out),
+    umerge0(Rest,NewOut).
+
+umerge1([],Out) ->
+    Out;
+umerge1([H|Rest],Out) ->
+    NewOut=case lists:member(H,Out) of
+	       false ->
+		   Out++[H];
+	       true ->
+		   Out
+	   end,
+    umerge1(Rest,NewOut).
+
+
+
+merge_lists([],Fields1,Out) ->
+    Out++Fields1;
+merge_lists([H={K,_}|Rest],Fields1,Out) ->
+    case proplists:get_value(K,Fields1) of
+	undefined ->
+	    merge_lists(Rest,Fields1,[H|Out]);
+	H ->
+	    Fields2=proplists:delete(K,Fields1),
+	    merge_lists(Rest,Fields2,[H|Out])
+    end.
+
+
+%%% Remove any duplicated element from List
+remove_duplicates([]) ->
+    [];
+remove_duplicates([H]) ->
+    [H];
+remove_duplicates(List) ->
+    remove_duplicates_list(List,[]).
+
+remove_duplicates_list([],Out) ->
+    lists:reverse(Out);
+remove_duplicates_list([Hd|Rest],Out) ->
+    case lists:member(Hd,Out) of
+ 	false ->
+ 	    remove_duplicates_list(Rest,[Hd|Out]);
+ 	true ->
+ 	    remove_duplicates_list(Rest,Out)
+    end.
+
+
+append(L1,L2) when is_list(L1),is_list(L2) ->
+    L1++L2;
+append(L1,_) when is_list(L1) ->
+    L1;
+append(_,L2) when is_list(L2) ->
+    L2;
+append(_,_) ->
+    [].
+
+%%% ============================================================================
+%% Operating System operations
+open_file(Name,Data) ->
+    case catch file:open(Name,[write]) of
+	{ok,IODev} when is_pid(IODev) ->
+	    case write_data(IODev,Data) of
+		ok ->
+		    IODev;
+		Error0 ->
+		    io:format("ERROR opened file, but when writing data on ~p, got ~p~n Data=~p~n",
+			      [Name,Error0,Data]),
+		    throw(Error0)
+	    end;
+	Error1 ->
+	    io:format("ERROR open_file ~p got ~p~n",[Name,Error1]),
+	    throw({error,bad_file})
+    end.
+
+
+write_data(IOdev,Data) ->
+    case catch file:write(IOdev,Data) of
+	ok ->
+	    ok;
+	Error0={'EXIT',{badarg,_}} ->
+	    Data0=lists:flatten(Data),
+	    open_file_check_bad_data(Data0),
+	    throw(Error0);
+	{error,Reason} ->
+	    io:format("ERROR writing data on ~p, got ~p~n Data=~p~n",
+		      [IOdev,Reason,Data]),
+	    exit({error,Reason})
+    end.
+
+open_file_check_bad_data([]) ->
+    ok;
+open_file_check_bad_data([H|Rest]) when is_integer(H),H>=0,H=<255 ->
+    open_file_check_bad_data(Rest);
+open_file_check_bad_data([H|_]) ->
+    io:format("ERROR open_file_check_bad_data Found ~p~n",[H]).
+
+
+mkdir(Dir) ->
+    os:cmd(["mkdir -p ",Dir]).
+
+
+%%% ============================================================================
+%%% Erlang source compilation
+
+%% Compile Erlang file
+compile(TSnameDir,TSnameStr,Opt) ->
+    case compile2(TSnameDir,TSnameStr,Opt) of
+	error ->
+	    throw({error,cannot_compile});
+	{error,Errors,_Warnings} ->
+	    throw({error,Errors});
+	_Other ->
+	    ok
+    end.
+	    
+
+
+
+compile2(TSnameDir,TSnameStr,Inc) when is_list(Inc)->
+    FileName=filename:join([TSnameDir,TSnameStr]),
+    LibDir="",
+    IncDirs=[{i,TSnameDir}|compile_cb_inc(Inc,LibDir,[])],
+    compile:file(FileName,[verbose,report_errors,report_warnings,
+			   {outdir,TSnameDir}|IncDirs]);
+compile2(TSnameDir,TSobsStr,observer) ->
+    Source=filename:join([code:priv_dir(?APP_NAME),"../src","em_observer.hrl"]),
+    Cmd=["cp ",Source," ",TSnameDir],
+    os:cmd(Cmd),
+    FileName=filename:join([TSnameDir,TSobsStr]),
+    compile:file(FileName,[verbose,report_errors,% report_warnings,
+			   {outdir,TSnameDir},{i,TSnameDir}]).
+
+%% Used by environment node to compile call back module.
+%% Additionally adds paths to be able to also execute to the call back module.
+compile_cb(CB,Inc,Ebins,AppName) when is_atom(CB) ->
+    LibDir=code:lib_dir(AppName),
+    File=filename:join([LibDir,"test/sut_if",atom_to_list(CB)]),
+    OutDir=LibDir, % FIXME Find some better place to store these
+    code:add_patha(OutDir),
+    Opts=[return_errors,{outdir,OutDir}]++compile_cb_inc(Inc,LibDir,[]),
+    code:add_patha(LibDir), 
+    emd_cfg:add_paths(Ebins,"."),
+    compile:file(File,Opts);
+compile_cb({Dir,CB},Inc,Ebins,_AppName) when is_list(Dir),
+				       is_atom(CB) ->
+    File=filename:join([Dir,"src",atom_to_list(CB)]),
+    OutDir=Dir, % FIXME Find some better place to store these
+    code:add_patha(OutDir),
+    Opts=[return_errors,{outdir,OutDir}|
+	  compile_cb_inc(Inc,Dir,[])],
+    emd_cfg:add_paths(Ebins,Dir),
+    compile:file(File,Opts).
+
+%% Expand include directories.
+compile_cb_inc([],_LibDir,Out) ->
+    lists:reverse(Out);
+compile_cb_inc([I|Rest],LibDir,Out) when is_list(I) ->
+    Dir=filename:join([LibDir,"../../",I]),
+    compile_cb_inc(Rest,LibDir,[{i,Dir}|Out]);
+compile_cb_inc([{Dir0,I}|Rest],LibDir,Out) when is_list(I),
+						is_list(Dir0) ->
+    Dir=filename:join([Dir0,I]),
+    compile_cb_inc(Rest,LibDir,[{i,Dir}|Out]).
+
+
+
+%% Compile (and load) modules on a running remote host (SUT).
+%% Note that the SUT may use another Erlang version
+compile_remote(SUTnode,Mod,Mod) ->
+    compile_remote2(SUTnode,Mod,Mod,Mod:module_info());
+compile_remote(SUTnode,ReplMod,Mod) ->
+    load_beam(node(),ReplMod,Mod),
+    compile_remote2(SUTnode,ReplMod,Mod,ReplMod:module_info()).
+
+compile_remote2(SUTnode,ReplMod,Mod,ModInfo) ->
+    CompInfo=proplists:get_value(compile,ModInfo),
+    Src=proplists:get_value(source,CompInfo),
+    Incs0=case proplists:get_value(options,CompInfo) of
+	     undefined ->
+		 [];
+	     I1 when is_list(I1) -> 
+		 [I0 || {i,I0} <- I1]
+	 end,
+    Incs=[filename:dirname(Src) | Incs0],
+    PreDefs=[{'EM_NODE',node()}],
+%    io:format("JB compile_remote ~p~n Src=~p~n Incs=~p~n",[Mod,Src,Incs]),
+    {ok,Parsed}=rpc:call(SUTnode,epp,parse_file,[Src,Incs,PreDefs]),
+    {ok,_,Bin}=rpc:call(SUTnode,compile,forms,
+			[Parsed,[verbose,report_errors,report_warnings,
+				 {outdir,"/tmp"}]]),
+
+    BeamFile="/tmp/"++atom_to_list(Mod)++".beam", % Just a fake name
+    case rpc:call(SUTnode,code,load_binary,[ReplMod,BeamFile,Bin]) of
+	{module,_} -> ok;
+	Error -> Error
+    end.
+	     
+
+
+compile_remote(Mod,RemInc,RemLibDir,SUTnode) ->
+%    io:format("JB compile_remote Mod=~p.~n RemInc=~p.~n RemLibDir=~p.~n SUTnode=~p.~n",
+%	      [Mod,RemInc,RemLibDir,SUTnode]),
+
+    CompInfo=proplists:get_value(compile,Mod:module_info()),
+    Src=proplists:get_value(source,CompInfo),
+    Incs=case proplists:get_value(options,CompInfo) of
+	     undefined ->
+		 [I || {i,I} <- compile_cb_inc(RemInc,RemLibDir,[])];
+	     I1 when is_list(I1) -> 
+		  [I0 || {i,I0} <- I1]
+	 end,
+
+    PreDefs=[{'EM_NODE',node()}],
+%    io:format("JB compile_remote ~p~n Src=~p~n Incs=~p~n PreDefs=~p~n",[Mod,Src,Incs,PreDefs]),
+    {ok,Parsed}=rpc:call(SUTnode,epp,parse_file,[Src,Incs,PreDefs]),
+    {ok,_,Bin}=rpc:call(SUTnode,compile,forms,
+			[Parsed,[verbose,report_errors,report_warnings,
+				 {outdir,"/tmp"}]]),
+
+    BeamFile="/tmp/"++atom_to_list(Mod)++".beam", % Just a fake name
+%    RemPath=rpc:call(SUTnode,code,which,[Mod]),
+    rpc:call(SUTnode,code,load_binary,[Mod,BeamFile,Bin]).
+
+    
+
+
+%%% ============================================================================
+%%% Misc stuff
+
+%%% Load an Erlang module
+load_beam(Node,ReplMod,Mod) ->
+    BeamFile=code:which(Mod),
+    case file:read_file(BeamFile) of
+	{ok, BeamBin} ->
+	    case rpc:call(Node,code,load_binary,[ReplMod, BeamFile, BeamBin]) of
+		{module, _M} ->
+		    ok;
+		Error ->
+		    io:format("Problem loading ~p beam on ~p, got ~p~n",
+			      [Mod,Node,Error]),
+		    Error
+	    end;
+	Error ->
+	    io:format("Problem reading beam, got ~p~n",[Error]),
+	    Error
+    end.
+
+%%% Start a list of applications, including all dependent applications.
+%% First add paths to applications dynamically from the given list, then start 
+%% LibDir  = For application in AppList without a full path, join with LibDir 
+%% AppList = [App or {Dir,App}] where App is an application and Dir a directory.
+%%      If Dir is an atom it is assumed to *not* be the full path
+%%      If Dir is a list it is assumed to be the full path
+%% Note:
+%% - An application depending on another application that is not yet started
+%%   {not_started} will try to start that application.
+%% - This is very similar to application:ensure_all_started/1, but additionally
+%%   tries to guess code paths and add accordingly.
+start_apps(AppList,LibDir) ->
+%    {PathList,AppList}=build_pathlist(AppList0,[],[]),
+%    add_paths(PathList,LibDir),
+    start_apps2(AppList,LibDir).
+
+
+start_apps2([],_) ->
+    ok;
+start_apps2(L=[App|Rest],LibDir) ->
+    try case application:start(App) of
+	    ok ->
+		start_apps2(Rest,LibDir);
+	    {error,{already_started,App}} ->
+		start_apps2(Rest,LibDir);
+	    {error,{not_started,NewApp}} ->
+		io:format("DEP: ~p~n",[NewApp]),
+		start_apps([NewApp],LibDir),
+		start_apps2(L,LibDir)
+	end
+    catch
+	exit:Reason ->
+	    io:format("EXIT ~p:start_apps/2 App=~p Reason=~p~n Stacktrace=~p~n",
+		      [?MODULE,App,Reason,erlang:get_stacktrace()]);
+	error:Reason ->
+	    io:format("ERROR ~p:start_apps/2 App=~p Reason=~p~n Stacktrace=~p~n",
+		      [?MODULE,App,Reason,erlang:get_stacktrace()])
+    end.
+
+
+%% build_pathlist([],Out1,Out2) ->
+%%     {lists:reverse(Out1),lists:reverse(Out2)};
+%% build_pathlist([{Dir,App}|Rest],Out1,Out2) ->
+%%     Path=if
+%% 	     is_atom(Dir) ->
+%% 		 atom_to_list(Dir)++"/"++atom_to_list(App)++"/ebin";
+%% 	     is_list(Dir) ->
+%% 		 {Dir,atom_to_list(App)++"/ebin"}
+%% 	 end,
+%%     build_pathlist(Rest,[Path|Out1],[App|Out2]);
+%% build_pathlist([App|Rest],Out1,Out2) when is_atom(App) ->
+%%     Path=atom_to_list(App)++"/ebin",
+%%     build_pathlist(Rest,[Path|Out1],[App|Out2]).    
+
+
+%% Add new paths:
+%% - Path       -> LibDir/Path, and
+%% - {Dir,Path} -> Dir/Path
+add_paths([],_Dir) -> 
+    ok;
+add_paths([I|Rest],LibDir) when is_list(I) ->
+    Dir=filename:join([LibDir,I]),
+    true=code:add_patha(Dir),
+    add_paths(Rest,LibDir);
+add_paths([{Dir0,I}|Rest],LibDir) ->
+    Dir=filename:join([Dir0,I]),
+    code:add_patha(Dir),
+    add_paths(Rest,LibDir).
+
+
+
+%%%% Stop all runnning applications.
+stop_app() ->
+    stop_apps(application:which_applications()),
+    halt().
+
+stop_apps([]) ->
+    ok;
+stop_apps([{App,_,_}|Rest]) when App==kernel;
+				 App==stdlib ->
+    stop_apps(Rest);
+stop_apps([{App,_,_}|Rest]) ->
+    application:stop(App),
+    stop_apps(Rest).

@@ -1,0 +1,17 @@
+### -*- makefile -*-
+
+# Common Build Targets
+$(APP_TARGET): $(APP_SRC) 
+	@set -e; mods=`echo $(MODULES) | sed -e 's; ;,;g'` ; \
+	sed -e "s;%MODULES%;$$mods;" $< | \
+	sed -e 's;%VSN%;$(VSN);' > $@
+
+
+$(EMAKE_TARGET): $(EMAKE_SRC) Makefile
+	@set -e; mods=`echo $(MODULES) | sed -e 's; ;,;g'` ; \
+	set -e; includes=`echo $(INCLUDES:%={i,\"%\"}) | sed -e 's; ;,;g'` ; \
+	sed -e "s;%MODULES%;$$mods;" $< | \
+	sed -e "s;%INCLUDES%;$$includes;" | \
+	sed -e 's;%VSN%;$(VSN);' > $@
+
+

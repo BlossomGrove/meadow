@@ -1,0 +1,9 @@
+%%% -*- erlang -*-
+
+{[%MODULES%],
+ [debug_info,
+  {outdir,"../ebin"},
+  %INCLUDES%
+ ]}.
+
+

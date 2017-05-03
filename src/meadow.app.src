@@ -1,0 +1,15 @@
+%%% -*- erlang -*-
+%%% Revision:         '$Id: erly_marsh.app.src,v 1.7 2010-10-12 06:06:44 johan Exp $'
+%%% Author:           '$Author: johan $'
+%%% This version:     '$Revision: 1.7 $'
+%%% Last modified:    '$Date: 2010-10-12 06:06:44 $'
+%%% Last modified by: '$Author: johan $'
+{application, erly_meadow,
+ [{description,  "Erly Meadow - mixed utility function"},
+  {applications, []},
+  {registered,[]},
+  {env,[]}, % Read config from own file
+  {vsn,          "%VSN%"},
+  {modules,      [%MODULES%]}
+  ]}.
+    
