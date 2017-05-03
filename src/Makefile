@@ -8,7 +8,6 @@ APP_NAME = meadow
 
 MODULES= \
 	emd_lib \
-	emd_cfg \
 	emd_json
 
 INCLUDES= \
