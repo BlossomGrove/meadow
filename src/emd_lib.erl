@@ -178,7 +178,7 @@ compile_cb(CB,Inc,Ebins,AppName) when is_atom(CB) ->
     code:add_patha(OutDir),
     Opts=[return_errors,{outdir,OutDir}]++compile_cb_inc(Inc,LibDir,[]),
     code:add_patha(LibDir), 
-    emd_cfg:add_paths(Ebins,"."),
+    add_paths(Ebins,"."),
     compile:file(File,Opts);
 compile_cb({Dir,CB},Inc,Ebins,_AppName) when is_list(Dir),
 				       is_atom(CB) ->
@@ -187,7 +187,7 @@ compile_cb({Dir,CB},Inc,Ebins,_AppName) when is_list(Dir),
     code:add_patha(OutDir),
     Opts=[return_errors,{outdir,OutDir}|
 	  compile_cb_inc(Inc,Dir,[])],
-    emd_cfg:add_paths(Ebins,Dir),
+    add_paths(Ebins,Dir),
     compile:file(File,Opts).
 
 %% Expand include directories.
@@ -295,9 +295,9 @@ load_beam(Node,ReplMod,Mod) ->
 %%   {not_started} will try to start that application.
 %% - This is very similar to application:ensure_all_started/1, but additionally
 %%   tries to guess code paths and add accordingly.
-start_apps(AppList,LibDir) ->
-%    {PathList,AppList}=build_pathlist(AppList0,[],[]),
-%    add_paths(PathList,LibDir),
+start_apps(AppList0,LibDir) ->
+    io:format("start_apps AppList0=~p~n",[AppList0]),
+    AppList=add_app_paths(AppList0,LibDir,[],[]),
     start_apps2(AppList,LibDir).
 
 
@@ -323,33 +323,42 @@ start_apps2(L=[App|Rest],LibDir) ->
 		      [?MODULE,App,Reason,erlang:get_stacktrace()])
     end.
 
+%% Iterates over a list that contain:
+%% - Names of applications, on the form App.
+%%   These are assumed to be located in LibDir
+%% - Tuples, on the form {Dir,App} where Dir is an alternative directory,
+%%   that may bedifferent from LibDir
+%% Creates and adds paths to all applications to start. The list of names to
+%% these applications are returned.
+add_app_paths([],LibDir,Out1,Out2) ->
+    PathList=lists:reverse(Out1),
+    io:format("JB PathList=~p~n",[PathList]),
+    add_paths(PathList,LibDir),
+    lists:reverse(Out2);
+add_app_paths([{Dir,App}|Rest],LibDir,Out1,Out2) when is_list(Dir) ->
+    Path=atom_to_list(App)++"/ebin",
+    add_app_paths(Rest,LibDir,[{Dir,Path}|Out1],[App|Out2]);
+add_app_paths([App|Rest],LibDir,Out1,Out2) when is_atom(App) ->
+    Path=atom_to_list(App)++"/ebin",
+    add_app_paths(Rest,LibDir,[Path|Out1],[App|Out2]).    
 
-%% build_pathlist([],Out1,Out2) ->
-%%     {lists:reverse(Out1),lists:reverse(Out2)};
-%% build_pathlist([{Dir,App}|Rest],Out1,Out2) ->
-%%     Path=if
-%% 	     is_atom(Dir) ->
-%% 		 atom_to_list(Dir)++"/"++atom_to_list(App)++"/ebin";
-%% 	     is_list(Dir) ->
-%% 		 {Dir,atom_to_list(App)++"/ebin"}
-%% 	 end,
-%%     build_pathlist(Rest,[Path|Out1],[App|Out2]);
-%% build_pathlist([App|Rest],Out1,Out2) when is_atom(App) ->
-%%     Path=atom_to_list(App)++"/ebin",
-%%     build_pathlist(Rest,[Path|Out1],[App|Out2]).    
 
 
 %% Add new paths:
 %% - Path       -> LibDir/Path, and
 %% - {Dir,Path} -> Dir/Path
-add_paths([],_Dir) -> 
+add_paths([],_LibDir) -> 
     ok;
-add_paths([I|Rest],LibDir) when is_list(I) ->
-    Dir=filename:join([LibDir,I]),
+add_paths([Path|Rest],LibDir) when is_list(Path) ->
+    io:format("JB-1 add_paths Path=~p LibDir=~p~n",[Path,LibDir]),
+    Dir=filename:join([LibDir,Path]),
+    io:format("JB-1b add_paths Dir=~p~n",[Dir]),
     true=code:add_patha(Dir),
+    io:format("JB-1c add_paths Dir=~p~n",[Dir]),
     add_paths(Rest,LibDir);
-add_paths([{Dir0,I}|Rest],LibDir) ->
-    Dir=filename:join([Dir0,I]),
+add_paths([{Dir0,Path}|Rest],LibDir) ->
+    io:format("JB-2 add_paths Path=~p~n",[Path]),
+    Dir=filename:join([Dir0,Path]),
     code:add_patha(Dir),
     add_paths(Rest,LibDir).
 

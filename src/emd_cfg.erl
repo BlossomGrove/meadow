@@ -137,10 +137,10 @@ expand_configs1([#match_expr{l={N1,N2},r=R0}|Rest],Env,Funcs,Out)
     {_,R}=expand_expr(R0,Env,Funcs),
     expand_configs1(Rest,Env,Funcs,Out++[{{N1,N2},R}]);
 expand_configs1([#match_expr{l=app_depend,r=AppList0}|Rest],Env,Funcs,Out) ->
-    LibDir=filename:join(code:lib_dir(?APP_NAME),".."),
-    {PathList,AppList}=build_pathlist(AppList0,[],[]),
-    emd_lib:add_paths(PathList,LibDir),
-    expand_configs1(Rest,Env,Funcs,Out++[{app_depend,AppList}]);
+%    LibDir=filename:join(code:lib_dir(?APP_NAME),".."),
+%    {PathList,AppList}=build_pathlist(AppList0,[],[]),
+%    emd_lib:add_paths(PathList,LibDir),
+    expand_configs1(Rest,Env,Funcs,Out++[{app_depend,AppList0}]);
 expand_configs1([#match_expr{l=Name,r=R0}|Rest],Env,Funcs,Out)
   when is_atom(Name) ->
     {_,R}=expand_expr(R0,Env,Funcs),
@@ -447,7 +447,7 @@ compile_cb(CB,Inc,Ebins,AppName) when is_atom(CB) ->
     code:add_patha(OutDir),
     Opts=[return_errors,{outdir,OutDir}]++compile_cb_inc(Inc,LibDir,[]),
     code:add_patha(LibDir), 
-    en_lib:add_paths(Ebins,LibDir),
+    emd_lib:add_paths(Ebins,LibDir),
     compile:file(File,Opts);
 compile_cb({Dir,CB},Inc,Ebins,_AppName) when is_list(Dir),
 				       is_atom(CB) ->
@@ -456,7 +456,7 @@ compile_cb({Dir,CB},Inc,Ebins,_AppName) when is_list(Dir),
     code:add_patha(OutDir),
     Opts=[return_errors,{outdir,OutDir}|
 	  compile_cb_inc(Inc,Dir,[])],
-    en_lib:add_paths(Ebins,Dir),
+    emd_lib:add_paths(Ebins,Dir),
     compile:file(File,Opts).
 
 %% Expand include directories.
