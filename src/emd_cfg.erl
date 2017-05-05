@@ -99,7 +99,7 @@ store_cfgs0([#application{op=definitions,args=[]}|Rest],_Env0,Funcs) ->
 	    {Env,_}=expand_body(Body,[],Funcs,[]),
 	    store_cfgs0(Rest,Env,Funcs);
 	Other ->
-	    io:format("Cannot store configuaration, got ~p~n",[Other]),
+	    io:format("Missing definitions/0 configuation, got ~p~n",[Other]),
 	    {error,bad_configuration}
     end;
 store_cfgs0([#application{op=configs,args=[AppName]}|Rest],Env,Funcs) ->
@@ -109,26 +109,9 @@ store_cfgs0([#application{op=configs,args=[AppName]}|Rest],Env,Funcs) ->
 	    expand_configs(Clauses,AppName,Env,Funcs),
 	    store_cfgs0(Rest,Env,Funcs);
 	Other ->
-	    io:format("Cannot store configuaration, got ~p~n",[Other]),
+	    io:format("Missing configs/1 configuation, got ~p~n",[Other]),
 	    {error,bad_configuration}
     end.
-
-
-%% store_cfgs_env([],Out) ->
-%%     lists:reverse(Out);
-%% store_cfgs_env([#match_expr{l=#variable{name=Name},r=R0}|Rest],Out) ->
-%%     R1=store_cfgs_env1(R0,Out),
-%%     store_cfgs_env(Rest,[{Name,R1}|Out]).
-
-%% store_cfgs_env1(#variable{name=Name},Env) ->
-%%     proplists:get_value(Name,Env);
-%% store_cfgs_env1(R,Env) when is_tuple(R) ->
-%%     list_to_tuple(store_cfgs_env1(tuple_to_list(R),Env));
-%% store_cfgs_env1(E,Env) when is_list(E) ->
-%%     [store_cfgs_env1(H,Env) || H <- E];
-%% store_cfgs_env1(E,_Env) ->
-%%     E.
-
 
 
 %% Lookup clause in configs/1 function matching AppName (MUST only be one)
@@ -139,9 +122,7 @@ expand_configs([],_AppName,_Env,_Funcs) ->
      ok;
 expand_configs([#clause_expr{pattern=[AppName],body=Body}|_],
 	      AppName,Env,Funcs) ->
-    io:format("JB-1 expand_configs AppName=~p~n Body=~p~n",[AppName,Body]),
     Cfgs=expand_configs1(Body,Env,Funcs,[]),
-    io:format("JB-2 expand_configs AppName=~p~n",[AppName]),
     store_config(Cfgs,AppName);
 expand_configs([_|Rest],AppName,Env,Funcs) ->
     expand_configs(Rest,AppName,Env,Funcs).
@@ -159,15 +140,11 @@ expand_configs1([#match_expr{l=app_depend,r=AppList0}|Rest],Env,Funcs,Out) ->
     LibDir=filename:join(code:lib_dir(?APP_NAME),".."),
     {PathList,AppList}=build_pathlist(AppList0,[],[]),
     emd_lib:add_paths(PathList,LibDir),
-%    {_,R}=expand_expr(AppList,Env,Funcs),
     expand_configs1(Rest,Env,Funcs,Out++[{app_depend,AppList}]);
 expand_configs1([#match_expr{l=Name,r=R0}|Rest],Env,Funcs,Out)
   when is_atom(Name) ->
     {_,R}=expand_expr(R0,Env,Funcs),
     expand_configs1(Rest,Env,Funcs,Out++[{Name,R}]);
-%% expand_config1([{K,V0}|Rest],Env,Funcs,Out) ->
-%%     {_,V}=expand_expr(V0,Env,Funcs),
-%%     expand_config1(Rest,Env,Funcs,Out++[{K,V}]);
 expand_configs1([#application{op=K,args=Args}|Rest],Env,Funcs,Out) ->
     Par=case Args of
 	    [Par0] -> Par0;
@@ -250,13 +227,6 @@ expand_body([#match_expr{l={N1,N2},r=R0}|Rest],Env,Funcs,Out)
     {_,R}=expand_expr(R0,Env,Funcs),
     expand_body(Rest,Env,Funcs,Out++[{{N1,N2},R}]);
 
-%% expand_body([{K,V0}|Rest],Env,Funcs,Out) when is_atom(K) ->
-%%     {_,V1}=expand_expr(V0,Env,Funcs),
-%%     expand_body(Rest,Env,Funcs,Out++[{K,V1}]);
-%% expand_body([{K={K1,K2},V0}|Rest],Env,Funcs,Out) when is_atom(K1),
-%% 						      is_atom(K2) ->
-%%     {_,V1}=expand_expr(V0,Env,Funcs),
-%%     expand_body(Rest,Env,Funcs,Out++[{K,V1}]);
 expand_body([Expr|Rest],Env,Funcs,Out) when is_integer(Expr);
 					    is_atom(Expr) ->
     expand_body(Rest,Env,Funcs,Out++[Expr]);
@@ -325,12 +295,6 @@ expand_expr(V0=#record_expr{arg=Arg,type=Type,fields=Fields0},Env,Funcs) ->
 		    Fields0
 	    end,
     {_,Fields}=expand_expr_fields(Fields2,Env,Funcs,[]),
-    %% if
-    %% 	Type==exec_ts ->
-    %% 	    io:format("OLD Fields=~p~n NEW Fields=~p~n",[Fields2,Fields]);
-    %% 	true ->
-    %% 	    ok
-    %% end,
     {Env,V0#record_expr{fields=Fields}};
 expand_expr(#infix_expr{l=L0,op='++',r=R0},Env,Funcs) ->
     {_,L}=expand_expr(L0,Env,Funcs),
@@ -341,7 +305,6 @@ expand_expr(Expr,Env,Funcs) when is_tuple(Expr) ->
     {Env,list_to_tuple(Expr1)};
 expand_expr(Expr,Env,Funcs) when is_list(Expr) ->
     expand_body(Expr,Env,Funcs,[]);
-%    [expand_expr(E,Env,Funcs) || E <- Expr];
 expand_expr(Expr,Env,_Funcs) when is_atom(Expr);is_integer(Expr) ->
     {Env,Expr}.
 
@@ -353,88 +316,6 @@ expand_expr_fields([{FN,FV}|Rest],Env,Funcs,Out) ->
     expand_expr_fields(Rest,Env,Funcs,[{FN,NewFV}|Out]).
 
 
-
-
-%% There may be variables in the body, replace with values
-%% expand_body1(V0,Env) when is_list(V0) ->
-%%     [expand_body1(V1,Env) || V1 <- V0];
-%% expand_body1(V0=#record_expr{arg=Arg,type=Type,fields=Fields0},Env) ->
-%%     Fields2=case Arg of
-%% 		#variable{name=Name} ->
-%% 		    %% Variable MUST be bound
-%% 		    case lists:keysearch(Name,1,Env) of
-%% 			{value,{_,#record_expr{fields=Fields1,type=Type}}} ->
-%% 			    emd_lib:merge_lists(Fields0,Fields1,[])
-%% 		    end;
-%% 		undefined ->
-%% 		    Fields0
-%% 	    end,
-%%     Fields=[{FN,expand_body1(FV,Env)} || {FN,FV} <- Fields2],
-%%     V0#record_expr{fields=Fields};
-%% expand_body1(#variable{name=Name},Env) ->
-%%     %% Variable MUST be bound
-%%     case proplists:get_value(Name,Env) of
-%% 	undefined ->
-%% 	    io:format("ERROR ~p not bound~n",[Name]),
-%% 	    throw({error,bad_configuration});
-%% 	Val ->
-%% 	    Val
-%%     end;
-%% expand_body1(#infix_expr{l=L0,op='++',r=R0},Env) ->
-%%     L=expand_body1(L0,Env),
-%%     R=expand_body1(R0,Env),
-%%     L++R;
-%% expand_body1(V0,Env) when is_tuple(V0) ->
-%%     list_to_tuple(expand_body1(tuple_to_list(V0),Env));
-%% expand_body1(V0,Env) when is_atom(V0);is_integer(V0) ->
-%%     V0;
-%% expand_body1(V0,Env) ->
-%%     V0.
-
-
-
-%% Explore helper config function 
-%% expand_body2([],_Env,Out) ->
-%%     Out;
-%% expand_body2([#clause_expr{pattern=Pattern,
-%% 			   body=Body}|Rest],Env,Out) ->
-%%     H=expand_body3(Body,Pattern,Env,[]),
-%%     NewOut=H++Out,
-%%     expand_body2(Rest,Env,NewOut).
-
-%% Explore a clause in a helper config function 
-%% expand_body3([],_Pattern,Env,Out) ->
-%%     lists:reverse(Out);
-%% expand_body3([#match_expr{l=#variable{name=Name},r=R}|Rest],Pattern,Env0,Out) ->
-%%     Env=[{Name,R}|Env0],
-%%     expand_body3(Rest,Pattern,Env,Out);
-%% expand_body3([{K,V0}|Rest],[],Env,Out) ->
-%%     V1=expand_body1(V0,Env),
-%%     expand_body3(Rest,[],Env,[{K,V1}|Out]);
-%% expand_body3([{K,V0}|Rest],[Par],Env,Out) ->
-%%     V1=expand_body1(V0,Env),
-%%     K3=case K of
-%% 	   {K1,K2 }->
-%% 	       {K1,Par,K2};
-%% 	   K1 ->
-%% 	       {K1,Par}
-%%        end,
-%%     expand_body3(Rest,[Par],Env,[{K3,V1}|Out]).
-
-
-%% Store configuration in standard application environment
-%% store_cfgs([]) -> 
-%%     ok;
-%% store_cfgs([{AppName,CfgList}|Rest]) ->
-%%     store_cfgs2(CfgList,AppName),
-%%     store_cfgs(Rest).
-    
-%% store_cfgs2([],AppName) ->
-%%     ok;
-%% store_cfgs2([{K,V0}|Rest],AppName) ->
-%%     V=map_records(V0),
-%%     application:set_env(AppName,K,V),
-%%     store_cfgs2(Rest,AppName).
 
 map_records(V,AppName) when is_list(V) ->
     map_record_list(V,AppName,[]);
@@ -561,7 +442,6 @@ compile2(TSnameDir,TSobsStr,observer) ->
 %% Additionally adds paths to be able to also execute to the call back module.
 compile_cb(CB,Inc,Ebins,AppName) when is_atom(CB) ->
     LibDir=code:lib_dir(AppName),
-%    io:format("JB-1 compile_cb ~p~n Incs=~p~n LibDir=~p~n",[CB,Inc,LibDir]),
     File=filename:join([LibDir,"test/sut_if",atom_to_list(CB)]),
     OutDir=LibDir, % FIXME Find some better place to store these
     code:add_patha(OutDir),
@@ -571,7 +451,6 @@ compile_cb(CB,Inc,Ebins,AppName) when is_atom(CB) ->
     compile:file(File,Opts);
 compile_cb({Dir,CB},Inc,Ebins,_AppName) when is_list(Dir),
 				       is_atom(CB) ->
-%    io:format("JB-2 compile_cb ~p~n Incs=~p~n Dir=~p~n",[CB,Inc,Dir]),
     File=filename:join([Dir,"src",atom_to_list(CB)]),
     OutDir=Dir, % FIXME Find some better place to store these
     code:add_patha(OutDir),
