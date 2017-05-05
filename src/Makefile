@@ -8,6 +8,7 @@ APP_NAME = meadow
 
 MODULES= \
 	emd_cfg \
+	emd_log \
 	emd_erlang \
 	emd_lib \
 	emd_json
