@@ -102,12 +102,13 @@ open_file(Name,Data) ->
 		ok ->
 		    IODev;
 		Error0 ->
-		    io:format("ERROR opened file, but when writing data on ~p, got ~p~n Data=~p~n",
-			      [Name,Error0,Data]),
+		    emd_log:error("Opened file, but when writing data on ~p,"
+				  " got ~p~n Data=~p~n",
+				  [Name,Error0,Data]),
 		    throw(Error0)
 	    end;
 	Error1 ->
-	    io:format("ERROR open_file ~p got ~p~n",[Name,Error1]),
+	    emd_log:error("~p:open_file ~p got ~p~n",[?MODULE,Name,Error1]),
 	    throw({error,bad_file})
     end.
 
@@ -121,8 +122,8 @@ write_data(IOdev,Data) ->
 	    open_file_check_bad_data(Data0),
 	    throw(Error0);
 	{error,Reason} ->
-	    io:format("ERROR writing data on ~p, got ~p~n Data=~p~n",
-		      [IOdev,Reason,Data]),
+	    emd_log:error("Writing data on ~p, got ~p~n Data=~p~n",
+			   [IOdev,Reason,Data]),
 	    exit({error,Reason})
     end.
 
@@ -131,7 +132,7 @@ open_file_check_bad_data([]) ->
 open_file_check_bad_data([H|Rest]) when is_integer(H),H>=0,H=<255 ->
     open_file_check_bad_data(Rest);
 open_file_check_bad_data([H|_]) ->
-    io:format("ERROR open_file_check_bad_data Found ~p~n",[H]).
+    emd_log:error("~p:open_file_check_bad_data Found ~p~n",[?MODULE,H]).
 
 
 mkdir(Dir) ->
@@ -222,7 +223,6 @@ compile_remote2(SUTnode,ReplMod,Mod,ModInfo) ->
 	 end,
     Incs=[filename:dirname(Src) | Incs0],
     PreDefs=[{'EM_NODE',node()}],
-%    io:format("JB compile_remote ~p~n Src=~p~n Incs=~p~n",[Mod,Src,Incs]),
     {ok,Parsed}=rpc:call(SUTnode,epp,parse_file,[Src,Incs,PreDefs]),
     {ok,_,Bin}=rpc:call(SUTnode,compile,forms,
 			[Parsed,[verbose,report_errors,report_warnings,
@@ -237,9 +237,6 @@ compile_remote2(SUTnode,ReplMod,Mod,ModInfo) ->
 
 
 compile_remote(Mod,RemInc,RemLibDir,SUTnode) ->
-%    io:format("JB compile_remote Mod=~p.~n RemInc=~p.~n RemLibDir=~p.~n SUTnode=~p.~n",
-%	      [Mod,RemInc,RemLibDir,SUTnode]),
-
     CompInfo=proplists:get_value(compile,Mod:module_info()),
     Src=proplists:get_value(source,CompInfo),
     Incs=case proplists:get_value(options,CompInfo) of
@@ -250,7 +247,6 @@ compile_remote(Mod,RemInc,RemLibDir,SUTnode) ->
 	 end,
 
     PreDefs=[{'EM_NODE',node()}],
-%    io:format("JB compile_remote ~p~n Src=~p~n Incs=~p~n PreDefs=~p~n",[Mod,Src,Incs,PreDefs]),
     {ok,Parsed}=rpc:call(SUTnode,epp,parse_file,[Src,Incs,PreDefs]),
     {ok,_,Bin}=rpc:call(SUTnode,compile,forms,
 			[Parsed,[verbose,report_errors,report_warnings,
@@ -275,12 +271,12 @@ load_beam(Node,ReplMod,Mod) ->
 		{module, _M} ->
 		    ok;
 		Error ->
-		    io:format("Problem loading ~p beam on ~p, got ~p~n",
-			      [Mod,Node,Error]),
+		    emd_log:error("Problem loading ~p beam on ~p, got ~p~n",
+				  [Mod,Node,Error]),
 		    Error
 	    end;
 	Error ->
-	    io:format("Problem reading beam, got ~p~n",[Error]),
+	    emd_log:error("Problem reading beam, got ~p~n",[Error]),
 	    Error
     end.
 
@@ -296,7 +292,7 @@ load_beam(Node,ReplMod,Mod) ->
 %% - This is very similar to application:ensure_all_started/1, but additionally
 %%   tries to guess code paths and add accordingly.
 start_apps(AppList0,LibDir) ->
-    io:format("start_apps AppList0=~p~n",[AppList0]),
+    emd_log:debug("start_apps AppList0=~p~n",[AppList0]),
     AppList=add_app_paths(AppList0,LibDir,[],[]),
     start_apps2(AppList,LibDir).
 
@@ -310,17 +306,19 @@ start_apps2(L=[App|Rest],LibDir) ->
 	    {error,{already_started,App}} ->
 		start_apps2(Rest,LibDir);
 	    {error,{not_started,NewApp}} ->
-		io:format("DEP: ~p~n",[NewApp]),
+		emd_log:info("DEP: ~p~n",[NewApp]),
 		start_apps([NewApp],LibDir),
 		start_apps2(L,LibDir)
 	end
     catch
 	exit:Reason ->
-	    io:format("EXIT ~p:start_apps/2 App=~p Reason=~p~n Stacktrace=~p~n",
-		      [?MODULE,App,Reason,erlang:get_stacktrace()]);
+	    emd_log:error("EXIT ~p:start_apps/2 App=~p Reason=~p~n"
+			  " Stacktrace=~p~n",
+			  [?MODULE,App,Reason,erlang:get_stacktrace()]);
 	error:Reason ->
-	    io:format("ERROR ~p:start_apps/2 App=~p Reason=~p~n Stacktrace=~p~n",
-		      [?MODULE,App,Reason,erlang:get_stacktrace()])
+	    emd_log:error("ERROR ~p:start_apps/2 App=~p Reason=~p~n"
+			  " Stacktrace=~p~n",
+			  [?MODULE,App,Reason,erlang:get_stacktrace()])
     end.
 
 %% Iterates over a list that contain:
@@ -332,7 +330,6 @@ start_apps2(L=[App|Rest],LibDir) ->
 %% these applications are returned.
 add_app_paths([],LibDir,Out1,Out2) ->
     PathList=lists:reverse(Out1),
-    io:format("JB PathList=~p~n",[PathList]),
     add_paths(PathList,LibDir),
     lists:reverse(Out2);
 add_app_paths([{Dir,App}|Rest],LibDir,Out1,Out2) when is_list(Dir) ->
@@ -350,14 +347,19 @@ add_app_paths([App|Rest],LibDir,Out1,Out2) when is_atom(App) ->
 add_paths([],_LibDir) -> 
     ok;
 add_paths([Path|Rest],LibDir) when is_list(Path) ->
-    io:format("JB-1 add_paths Path=~p LibDir=~p~n",[Path,LibDir]),
+    emd_log:debug("JB-1 add_paths Path=~p LibDir=~p~n",[Path,LibDir]),
     Dir=filename:join([LibDir,Path]),
-    io:format("JB-1b add_paths Dir=~p~n",[Dir]),
-    true=code:add_patha(Dir),
-    io:format("JB-1c add_paths Dir=~p~n",[Dir]),
+    try true=code:add_patha(Dir)
+    catch
+	exit:Reason ->
+	    emd_log:warning("Could not add path ~p, got ~p~n",[Dir,Reason]);
+	error:Reason ->
+	    emd_log:warning("Could not add path ~p, got ~p~n",[Dir,Reason])
+    end,
+    emd_log:debug("JB-1c add_paths Dir=~p~n",[Dir]),
     add_paths(Rest,LibDir);
 add_paths([{Dir0,Path}|Rest],LibDir) ->
-    io:format("JB-2 add_paths Path=~p~n",[Path]),
+    emd_log:debug("JB-2 add_paths Path=~p~n",[Path]),
     Dir=filename:join([Dir0,Path]),
     code:add_patha(Dir),
     add_paths(Rest,LibDir).

@@ -19,10 +19,10 @@
 %%% API
 %%%===================================================================
 error(Format) ->
-    io:format("E:"++Format,[]).
+    io:format("ERROR:"++Format,[]).
 
 error(Format,Args) ->
-    io:format("E:"++Format,Args).
+    io:format("ERROR:"++Format,Args).
 
 warning(Format) ->
     io:format("W:"++Format,[]).
