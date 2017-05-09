@@ -19,28 +19,28 @@
 %%% API
 %%%===================================================================
 error(Format) ->
-    io:format("ERROR:"++Format,[]).
+    io:format("ERROR:"++Format++"~n",[]).
 
 error(Format,Args) ->
-    io:format("ERROR:"++Format,Args).
+    io:format("ERROR:"++Format++"~n",Args).
 
 warning(Format) ->
-    io:format("W:"++Format,[]).
+    io:format("W:"++Format++"~n",[]).
 
 warning(Format,Args) ->
-    io:format("W:"++Format,Args).
+    io:format("W:"++Format++"~n",Args).
 
 info(Format) ->
-    io:format("I:"++Format,[]).
+    io:format("I:"++Format++"~n",[]).
 
 info(Format,Args) ->
-    io:format("I:"++Format,Args).
+    io:format("I:"++Format++"~n",Args).
 
 debug(Format) ->
-    io:format("D:"++Format,[]).
+    io:format("D:"++Format++"~n",[]).
 
 debug(Format,Args) ->
-    io:format("D:"++Format,Args).
+    io:format("D:"++Format++"~n",Args).
 
 
 %%--------------------------------------------------------------------

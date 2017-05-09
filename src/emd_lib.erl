@@ -103,12 +103,12 @@ open_file(Name,Data) ->
 		    IODev;
 		Error0 ->
 		    emd_log:error("Opened file, but when writing data on ~p,"
-				  " got ~p~n Data=~p~n",
+				  " got ~p~n Data=~p",
 				  [Name,Error0,Data]),
 		    throw(Error0)
 	    end;
 	Error1 ->
-	    emd_log:error("~p:open_file ~p got ~p~n",[?MODULE,Name,Error1]),
+	    emd_log:error("~p:open_file ~p got ~p",[?MODULE,Name,Error1]),
 	    throw({error,bad_file})
     end.
 
@@ -122,7 +122,7 @@ write_data(IOdev,Data) ->
 	    open_file_check_bad_data(Data0),
 	    throw(Error0);
 	{error,Reason} ->
-	    emd_log:error("Writing data on ~p, got ~p~n Data=~p~n",
+	    emd_log:error("Writing data on ~p, got ~p~n Data=~p",
 			   [IOdev,Reason,Data]),
 	    exit({error,Reason})
     end.
@@ -132,7 +132,7 @@ open_file_check_bad_data([]) ->
 open_file_check_bad_data([H|Rest]) when is_integer(H),H>=0,H=<255 ->
     open_file_check_bad_data(Rest);
 open_file_check_bad_data([H|_]) ->
-    emd_log:error("~p:open_file_check_bad_data Found ~p~n",[?MODULE,H]).
+    emd_log:error("~p:open_file_check_bad_data Found ~p",[?MODULE,H]).
 
 
 mkdir(Dir) ->
@@ -271,12 +271,12 @@ load_beam(Node,ReplMod,Mod) ->
 		{module, _M} ->
 		    ok;
 		Error ->
-		    emd_log:error("Problem loading ~p beam on ~p, got ~p~n",
+		    emd_log:error("Problem loading ~p beam on ~p, got ~p",
 				  [Mod,Node,Error]),
 		    Error
 	    end;
 	Error ->
-	    emd_log:error("Problem reading beam, got ~p~n",[Error]),
+	    emd_log:error("Problem reading beam, got ~p",[Error]),
 	    Error
     end.
 
@@ -292,7 +292,7 @@ load_beam(Node,ReplMod,Mod) ->
 %% - This is very similar to application:ensure_all_started/1, but additionally
 %%   tries to guess code paths and add accordingly.
 start_apps(AppList0,LibDir) ->
-    emd_log:debug("start_apps AppList0=~p~n",[AppList0]),
+    emd_log:debug("start_apps AppList0=~p",[AppList0]),
     AppList=add_app_paths(AppList0,LibDir,[],[]),
     start_apps2(AppList,LibDir).
 
@@ -306,18 +306,14 @@ start_apps2(L=[App|Rest],LibDir) ->
 	    {error,{already_started,App}} ->
 		start_apps2(Rest,LibDir);
 	    {error,{not_started,NewApp}} ->
-		emd_log:info("DEP: ~p~n",[NewApp]),
+		emd_log:info("DEP: ~p",[NewApp]),
 		start_apps([NewApp],LibDir),
 		start_apps2(L,LibDir)
 	end
     catch
-	exit:Reason ->
+	_:Reason ->
 	    emd_log:error("EXIT ~p:start_apps/2 App=~p Reason=~p~n"
-			  " Stacktrace=~p~n",
-			  [?MODULE,App,Reason,erlang:get_stacktrace()]);
-	error:Reason ->
-	    emd_log:error("ERROR ~p:start_apps/2 App=~p Reason=~p~n"
-			  " Stacktrace=~p~n",
+			  " Stacktrace=~p",
 			  [?MODULE,App,Reason,erlang:get_stacktrace()])
     end.
 
@@ -347,19 +343,17 @@ add_app_paths([App|Rest],LibDir,Out1,Out2) when is_atom(App) ->
 add_paths([],_LibDir) -> 
     ok;
 add_paths([Path|Rest],LibDir) when is_list(Path) ->
-    emd_log:debug("JB-1 add_paths Path=~p LibDir=~p~n",[Path,LibDir]),
+    emd_log:debug("JB-1 add_paths Path=~p LibDir=~p",[Path,LibDir]),
     Dir=filename:join([LibDir,Path]),
     try true=code:add_patha(Dir)
     catch
-	exit:Reason ->
-	    emd_log:warning("Could not add path ~p, got ~p~n",[Dir,Reason]);
-	error:Reason ->
-	    emd_log:warning("Could not add path ~p, got ~p~n",[Dir,Reason])
+	_:Reason ->
+	    emd_log:warning("Could not add path ~p, got ~p",[Dir,Reason])
     end,
-    emd_log:debug("JB-1c add_paths Dir=~p~n",[Dir]),
+    emd_log:debug("JB-1c add_paths Dir=~p",[Dir]),
     add_paths(Rest,LibDir);
 add_paths([{Dir0,Path}|Rest],LibDir) ->
-    emd_log:debug("JB-2 add_paths Path=~p~n",[Path]),
+    emd_log:debug("JB-2 add_paths Path=~p",[Path]),
     Dir=filename:join([Dir0,Path]),
     code:add_patha(Dir),
     add_paths(Rest,LibDir).
