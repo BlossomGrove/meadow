@@ -136,11 +136,11 @@ expand_configs1([#match_expr{l={N1,N2},r=R0}|Rest],Env,Funcs,Out)
   when is_atom(N1),is_atom(N2) ->
     {_,R}=expand_expr(R0,Env,Funcs),
     expand_configs1(Rest,Env,Funcs,Out++[{{N1,N2},R}]);
-expand_configs1([#match_expr{l=app_depend,r=AppList0}|Rest],Env,Funcs,Out) ->
-%    LibDir=filename:join(code:lib_dir(?APP_NAME),".."),
-%    {PathList,AppList}=build_pathlist(AppList0,[],[]),
-%    emd_lib:add_paths(PathList,LibDir),
-    expand_configs1(Rest,Env,Funcs,Out++[{app_depend,AppList0}]);
+expand_configs1([#match_expr{l=app_depend,r=AppList}|Rest],Env,Funcs,Out) ->
+    LibDir=filename:dirname(filename:dirname(
+			      filename:dirname(code:which(?MODULE)))),
+    emd_lib:add_app_paths(AppList,LibDir),
+    expand_configs1(Rest,Env,Funcs,Out++[{app_depend,AppList}]);
 expand_configs1([#match_expr{l=Name,r=R0}|Rest],Env,Funcs,Out)
   when is_atom(Name) ->
     {_,R}=expand_expr(R0,Env,Funcs),
@@ -470,17 +470,3 @@ compile_cb_inc([{Dir0,I}|Rest],LibDir,Out) when is_list(I),
     Dir=filename:join([Dir0,I]),
     compile_cb_inc(Rest,LibDir,[{i,Dir}|Out]).
 
-
-build_pathlist([],Out1,Out2) ->
-    {lists:reverse(Out1),lists:reverse(Out2)};
-build_pathlist([{Dir,App}|Rest],Out1,Out2) ->
-    Path=if
-	     is_atom(Dir) ->
-		 atom_to_list(Dir)++"/"++atom_to_list(App)++"/ebin";
-	     is_list(Dir) ->
-		 {Dir,atom_to_list(App)++"/ebin"}
-	 end,
-    build_pathlist(Rest,[Path|Out1],[App|Out2]);
-build_pathlist([App|Rest],Out1,Out2) when is_atom(App) ->
-    Path=atom_to_list(App)++"/ebin",
-    build_pathlist(Rest,[Path|Out1],[App|Out2]).    

@@ -20,8 +20,9 @@
 
 	 %% Misc stuff
 	 load_beam/3,
+	 add_app_paths/2,
 	 add_paths/2,
-	 start_apps/2,stop_app/0
+	 start_apps/1,stop_app/0
 
 	]).
 
@@ -291,24 +292,29 @@ load_beam(Node,ReplMod,Mod) ->
 %%   {not_started} will try to start that application.
 %% - This is very similar to application:ensure_all_started/1, but additionally
 %%   tries to guess code paths and add accordingly.
-start_apps(AppList0,LibDir) ->
+start_apps(AppList0) ->
     emd_log:debug("start_apps AppList0=~p",[AppList0]),
-    AppList=add_app_paths(AppList0,LibDir,[],[]),
-    start_apps2(AppList,LibDir).
+    AppList=[to_app(AE) || AE <- AppList0],
+    start_apps2(AppList).
 
+% add_app_paths(AppList0,LibDir,[],[]),
 
-start_apps2([],_) ->
+to_app({App,_}) -> App;
+to_app(App) -> App.
+    
+
+start_apps2([]) ->
     ok;
-start_apps2(L=[App|Rest],LibDir) ->
+start_apps2(L=[App|Rest]) ->
     try case application:start(App) of
 	    ok ->
-		start_apps2(Rest,LibDir);
+		start_apps2(Rest);
 	    {error,{already_started,App}} ->
-		start_apps2(Rest,LibDir);
+		start_apps2(Rest);
 	    {error,{not_started,NewApp}} ->
 		emd_log:info("DEP: ~p",[NewApp]),
-		start_apps([NewApp],LibDir),
-		start_apps2(L,LibDir)
+		start_apps([NewApp]),
+		start_apps2(L)
 	end
     catch
 	_:Reason ->
@@ -318,22 +324,23 @@ start_apps2(L=[App|Rest],LibDir) ->
     end.
 
 %% Iterates over a list that contain:
-%% - Names of applications, on the form App.
-%%   These are assumed to be located in LibDir
-%% - Tuples, on the form {Dir,App} where Dir is an alternative directory,
-%%   that may bedifferent from LibDir
+%% - Names (atom) of applications. These are assumed to be located in LibDir.
+%% - Tuples, on the form {Dir,App} where Dir is a directory, that may
+%%   be different from LibDir.
 %% Creates and adds paths to all applications to start. The list of names to
 %% these applications are returned.
-add_app_paths([],LibDir,Out1,Out2) ->
+add_app_paths(AppList,LibDir) ->
+    add_app_paths(AppList,LibDir,[]).
+
+add_app_paths([],LibDir,Out1) ->
     PathList=lists:reverse(Out1),
-    add_paths(PathList,LibDir),
-    lists:reverse(Out2);
-add_app_paths([{Dir,App}|Rest],LibDir,Out1,Out2) when is_list(Dir) ->
+    add_paths(PathList,LibDir);
+add_app_paths([{Dir,App}|Rest],LibDir,Out1) when is_list(Dir) ->
     Path=atom_to_list(App)++"/ebin",
-    add_app_paths(Rest,LibDir,[{Dir,Path}|Out1],[App|Out2]);
-add_app_paths([App|Rest],LibDir,Out1,Out2) when is_atom(App) ->
+    add_app_paths(Rest,LibDir,[{Dir,Path}|Out1]);
+add_app_paths([App|Rest],LibDir,Out1) when is_atom(App) ->
     Path=atom_to_list(App)++"/ebin",
-    add_app_paths(Rest,LibDir,[Path|Out1],[App|Out2]).    
+    add_app_paths(Rest,LibDir,[Path|Out1]).
 
 
 
