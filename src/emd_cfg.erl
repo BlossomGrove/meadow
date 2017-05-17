@@ -305,7 +305,9 @@ expand_expr(Expr,Env,Funcs) when is_tuple(Expr) ->
     {Env,list_to_tuple(Expr1)};
 expand_expr(Expr,Env,Funcs) when is_list(Expr) ->
     expand_body(Expr,Env,Funcs,[]);
-expand_expr(Expr,Env,_Funcs) when is_atom(Expr);is_integer(Expr) ->
+expand_expr(Expr,Env,_Funcs) when is_atom(Expr);
+				  is_integer(Expr);
+				  is_binary(Expr) ->
     {Env,Expr}.
 
 				 

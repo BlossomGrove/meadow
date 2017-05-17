@@ -57,6 +57,15 @@ erlsyn_to_inter(Tree) ->
     case erl_syntax:type(Tree) of
 	atom ->
 	    erl_syntax:atom_value(Tree);
+	binary ->
+	    L=[erlsyn_to_inter(T) || T <- erl_syntax:binary_fields(Tree)],
+	    list_to_binary(L);
+	binary_field ->
+	    erlsyn_to_inter(erl_syntax:binary_field_body(Tree));
+	integer ->
+	    erl_syntax:integer_value(Tree);
+	string ->
+	    erl_syntax:string_value(Tree);
 	variable ->
 	    #variable{name=erl_syntax:variable_name(Tree)};
 	underscore ->
@@ -149,10 +158,6 @@ erlsyn_to_inter(Tree) ->
 	    list_to_tuple(List);
 	list ->
 	    erlsyn_to_inter(erl_syntax:list_elements(Tree));
-	string ->
-	    erl_syntax:string_value(Tree);
-	integer ->
-	    erl_syntax:integer_value(Tree);
 	module_qualifier ->
 	    M=erlsyn_to_inter(erl_syntax:module_qualifier_argument(Tree)),
 	    F=erlsyn_to_inter(erl_syntax:module_qualifier_body(Tree)),
@@ -175,7 +180,7 @@ erlsyn_to_inter(Tree) ->
 	    eof_marker;
 	Other ->
 	    io:format("ERROR ~p:erlsyn_to_inter~n"
-		      " Unexpected expression (~p) in guard~n Tree=~p~n",
+		      " Unexpected expression (~p) in ~n Tree=~p~n",
 		      [?MODULE,Other,Tree]),
 	    throw({error,bad_spec})
     end.
