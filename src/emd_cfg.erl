@@ -228,7 +228,8 @@ expand_body([#match_expr{l={N1,N2},r=R0}|Rest],Env,Funcs,Out)
     expand_body(Rest,Env,Funcs,Out++[{{N1,N2},R}]);
 
 expand_body([Expr|Rest],Env,Funcs,Out) when is_integer(Expr);
-					    is_atom(Expr) ->
+					    is_atom(Expr);
+					    is_binary(Expr) ->
     expand_body(Rest,Env,Funcs,Out++[Expr]);
 expand_body([Expr|Rest],Env,Funcs,Out) when is_record(Expr,application);
 					    is_record(Expr,variable);
