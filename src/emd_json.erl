@@ -138,7 +138,7 @@ decode_json(S) ->
 json_encode(I, _State) when is_integer(I) ->
     integer_to_list(I);
 json_encode(F, _State) when is_float(F) ->
-    nitro_mochinum:digits(F);
+    to_digits(F);
 json_encode(S, State) when is_binary(S); is_atom(S) ->
     json_encode_string(S, State);
 json_encode([{K, _}|_] = Props, State) when (K =/= struct andalso
