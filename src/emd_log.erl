@@ -9,38 +9,53 @@
 -module(emd_log).
 
 %% API
--export([error/1,error/2,
-	 warning/1,warning/2,
-	 info/1,info/2,
-	 debug/1,debug/2
+-export([error/1,error/2,error/3,
+	 warning/1,warning/2,warning/3,
+	 info/1,info/2,info/3,
+	 debug/1,debug/2,debug/3
 	]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
 error(Format) ->
-    io:format("ERROR:"++Format++"~n",[]).
+    format("ERROR:",Format,[],[]).
 
 error(Format,Args) ->
-    io:format("ERROR:"++Format++"~n",Args).
+    format("ERROR:",Format,Args,[]).
+
+error(Format,Args,Add) ->
+    format("ERROR:",Format,Args,Add).
 
 warning(Format) ->
-    io:format("W:"++Format++"~n",[]).
+    format("W:",Format,[],[]).
 
 warning(Format,Args) ->
-    io:format("W:"++Format++"~n",Args).
+    format("W:",Format,Args,[]).
+
+warning(Format,Args,Add) ->
+    format("W:",Format,Args,Add).
 
 info(Format) ->
-    io:format("I:"++Format++"~n",[]).
+    format("I:",Format,[],[]).
 
 info(Format,Args) ->
-    io:format("I:"++Format++"~n",Args).
+    format("I:",Format,Args,[]).
+
+info(Format,Args,Add) ->
+    format("I:",Format,Args,Add).
 
 debug(Format) ->
-    io:format("D:"++Format++"~n",[]).
+    format("D:",Format,[],[]).
 
 debug(Format,Args) ->
-    io:format("D:"++Format++"~n",Args).
+    format("D:",Format,Args,[]).
+
+debug(Format,Args,Add) ->
+    format("D:",Format,Args,Add).
+
+
+
 
 
 %%--------------------------------------------------------------------
@@ -52,3 +67,8 @@ debug(Format,Args) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+format(Pre,Format,Args,[]) ->
+    io:format(Pre++Format++"~n",Args);
+format(Pre,Format,Args,Add) ->
+    io:format(Pre++" in ~p, ~p/~p, line ~p"++Format++"~n",Add++Args).
+    
